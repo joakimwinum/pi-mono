@@ -434,8 +434,7 @@ export class InteractiveMode {
 
 		// Convert extension commands to SlashCommand format
 		const builtinCommandNames = new Set(slashCommands.map((c) => c.name));
-		const extensionCommands: SlashCommand[] = this.session.extensionRunner
-			.getRegisteredCommands()
+		const extensionCommands: SlashCommand[] = (this.session.extensionRunner?.getRegisteredCommands() ?? [])
 			.filter((cmd) => !builtinCommandNames.has(cmd.name))
 			.map((cmd) => ({
 				name: cmd.invocationName,
@@ -1392,11 +1391,14 @@ export class InteractiveMode {
 				}
 			}
 
-			const commandDiagnostics = this.session.extensionRunner.getCommandDiagnostics();
+			const extensionRunner = this.session.extensionRunner;
+			const commandDiagnostics = extensionRunner?.getCommandDiagnostics() ?? [];
 			extensionDiagnostics.push(...commandDiagnostics);
-			extensionDiagnostics.push(...this.getBuiltInCommandConflictDiagnostics(this.session.extensionRunner));
+			if (extensionRunner) {
+				extensionDiagnostics.push(...this.getBuiltInCommandConflictDiagnostics(extensionRunner));
+			}
 
-			const shortcutDiagnostics = this.session.extensionRunner.getShortcutDiagnostics();
+			const shortcutDiagnostics = extensionRunner?.getShortcutDiagnostics() ?? [];
 			extensionDiagnostics.push(...shortcutDiagnostics);
 
 			if (extensionDiagnostics.length > 0) {
@@ -1562,9 +1564,12 @@ export class InteractiveMode {
 	/**
 	 * Set up keyboard shortcuts registered by extensions.
 	 */
-	private setupExtensionShortcuts(extensionRunner: ExtensionRunner): void {
-		const shortcuts = extensionRunner.getShortcuts(this.keybindings.getEffectiveConfig());
-		if (shortcuts.size === 0) return;
+	private setupExtensionShortcuts(extensionRunner?: ExtensionRunner): void {
+		const shortcuts = extensionRunner?.getShortcuts(this.keybindings.getEffectiveConfig()) ?? new Map();
+		if (shortcuts.size === 0) {
+			this.defaultEditor.onExtensionShortcut = undefined;
+			return;
+		}
 
 		// Create a context for shortcut handlers
 		const createContext = (): ExtensionContext => ({
@@ -2927,7 +2932,7 @@ export class InteractiveMode {
 			}
 			case "custom": {
 				if (message.display) {
-					const renderer = this.session.extensionRunner.getMessageRenderer(message.customType);
+					const renderer = this.session.extensionRunner?.getMessageRenderer(message.customType);
 					const component = new CustomMessageComponent(message, renderer, this.getMarkdownThemeWithSettings());
 					component.setExpanded(this.toolOutputExpanded);
 					this.chatContainer.addChild(component);
@@ -3534,7 +3539,7 @@ export class InteractiveMode {
 
 		const spaceIndex = text.indexOf(" ");
 		const commandName = spaceIndex === -1 ? text.slice(1) : text.slice(1, spaceIndex);
-		return !!extensionRunner.getCommand(commandName);
+		return !!extensionRunner?.getCommand(commandName);
 	}
 
 	private async flushCompactionQueue(options?: { willRetry?: boolean }): Promise<void> {
@@ -4900,8 +4905,7 @@ export class InteractiveMode {
 `;
 
 		// Add extension-registered shortcuts
-		const extensionRunner = this.session.extensionRunner;
-		const shortcuts = extensionRunner.getShortcuts(this.keybindings.getEffectiveConfig());
+		const shortcuts = this.session.extensionRunner?.getShortcuts(this.keybindings.getEffectiveConfig()) ?? new Map();
 		if (shortcuts.size > 0) {
 			hotkeys += `
 **Extensions**
@@ -4910,7 +4914,7 @@ export class InteractiveMode {
 `;
 			for (const [key, shortcut] of shortcuts) {
 				const description = shortcut.description ?? shortcut.extensionPath;
-				const keyDisplay = key.replace(/\b\w/g, (c) => c.toUpperCase());
+				const keyDisplay = key.replace(/\b\w/g, (c: string) => c.toUpperCase());
 				hotkeys += `| \`${keyDisplay}\` | ${description} |\n`;
 			}
 		}
@@ -5006,12 +5010,14 @@ export class InteractiveMode {
 		const extensionRunner = this.session.extensionRunner;
 
 		// Emit user_bash event to let extensions intercept
-		const eventResult = await extensionRunner.emitUserBash({
-			type: "user_bash",
-			command,
-			excludeFromContext,
-			cwd: this.sessionManager.getCwd(),
-		});
+		const eventResult = extensionRunner
+			? await extensionRunner.emitUserBash({
+					type: "user_bash",
+					command,
+					excludeFromContext,
+					cwd: this.sessionManager.getCwd(),
+				})
+			: undefined;
 
 		// If extension returned a full result, use it directly
 		if (eventResult?.result) {

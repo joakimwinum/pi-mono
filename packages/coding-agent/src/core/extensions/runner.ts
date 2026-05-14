@@ -34,6 +34,7 @@ import type {
 	InputEvent,
 	InputEventResult,
 	InputSource,
+	LoadedResourcesSnapshot,
 	MessageEndEvent,
 	MessageEndEventResult,
 	MessageRenderer,
@@ -238,6 +239,14 @@ export class ExtensionRunner {
 	private getContextUsageFn: () => ContextUsage | undefined = () => undefined;
 	private compactFn: (options?: CompactOptions) => void = () => {};
 	private getSystemPromptFn: () => string = () => "";
+	private getResourcesFn: () => LoadedResourcesSnapshot = () => ({
+		contextFiles: [],
+		skills: [],
+		prompts: [],
+		extensions: [],
+		themes: [],
+		diagnostics: { skills: [], prompts: [], extensions: [], themes: [] },
+	});
 	private newSessionHandler: NewSessionHandler = async () => ({ cancelled: false });
 	private forkHandler: ForkHandler = async () => ({ cancelled: false });
 	private navigateTreeHandler: NavigateTreeHandler = async () => ({ cancelled: false });
@@ -283,6 +292,7 @@ export class ExtensionRunner {
 		this.runtime.setActiveTools = actions.setActiveTools;
 		this.runtime.refreshTools = actions.refreshTools;
 		this.runtime.getCommands = actions.getCommands;
+		this.runtime.getResources = actions.getResources;
 		this.runtime.setModel = actions.setModel;
 		this.runtime.getThinkingLevel = actions.getThinkingLevel;
 		this.runtime.setThinkingLevel = actions.setThinkingLevel;
@@ -297,6 +307,7 @@ export class ExtensionRunner {
 		this.getContextUsageFn = contextActions.getContextUsage;
 		this.compactFn = contextActions.compact;
 		this.getSystemPromptFn = contextActions.getSystemPrompt;
+		this.getResourcesFn = contextActions.getResources;
 
 		// Flush provider registrations queued during extension loading
 		for (const { name, config, extensionPath } of this.runtime.pendingProviderRegistrations) {
@@ -629,6 +640,10 @@ export class ExtensionRunner {
 			getSystemPrompt: () => {
 				runner.assertActive();
 				return runner.getSystemPromptFn();
+			},
+			getResources: () => {
+				runner.assertActive();
+				return runner.getResourcesFn();
 			},
 		};
 	}

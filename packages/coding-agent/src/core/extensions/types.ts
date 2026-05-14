@@ -43,12 +43,14 @@ import type { Static, TSchema } from "typebox";
 import type { Theme } from "../../modes/interactive/theme/theme.js";
 import type { BashResult } from "../bash-executor.js";
 import type { CompactionPreparation, CompactionResult } from "../compaction/index.js";
+import type { ResourceCollision, ResourceDiagnostic } from "../diagnostics.js";
 import type { EventBus } from "../event-bus.js";
 import type { ExecOptions, ExecResult } from "../exec.js";
 import type { ReadonlyFooterDataProvider } from "../footer-data-provider.js";
 import type { KeybindingsManager } from "../keybindings.js";
 import type { CustomMessage } from "../messages.js";
 import type { ModelRegistry } from "../model-registry.js";
+import type { PromptTemplate } from "../prompt-templates.js";
 import type {
 	BranchSummaryEntry,
 	CompactionEntry,
@@ -56,6 +58,7 @@ import type {
 	SessionEntry,
 	SessionManager,
 } from "../session-manager.js";
+import type { Skill } from "../skills.js";
 import type { SlashCommandInfo } from "../slash-commands.js";
 import type { SourceInfo } from "../source-info.js";
 import type { BuildSystemPromptOptions } from "../system-prompt.js";
@@ -292,6 +295,57 @@ export interface CompactOptions {
 	onError?: (error: Error) => void;
 }
 
+export type LoadedContextFileResource = Readonly<{
+	path: string;
+	content: string;
+}>;
+
+export type LoadedSkillResource = Readonly<
+	Pick<Skill, "name" | "description" | "filePath" | "baseDir" | "disableModelInvocation"> & {
+		readonly sourceInfo: Readonly<SourceInfo>;
+	}
+>;
+
+export type LoadedPromptResource = Readonly<
+	Pick<PromptTemplate, "name" | "description" | "argumentHint" | "filePath"> & {
+		readonly sourceInfo: Readonly<SourceInfo>;
+	}
+>;
+
+export type LoadedExtensionResource = Readonly<{
+	path: string;
+	resolvedPath: string;
+	sourceInfo: Readonly<SourceInfo>;
+}>;
+
+export type LoadedThemeResource = Readonly<{
+	name?: string;
+	path?: string;
+	sourceInfo?: Readonly<SourceInfo>;
+}>;
+
+export type LoadedResourceDiagnostic = Readonly<
+	Omit<ResourceDiagnostic, "collision"> & {
+		readonly collision?: Readonly<ResourceCollision>;
+	}
+>;
+
+export type LoadedResourceDiagnostics = Readonly<{
+	skills: readonly LoadedResourceDiagnostic[];
+	prompts: readonly LoadedResourceDiagnostic[];
+	extensions: readonly LoadedResourceDiagnostic[];
+	themes: readonly LoadedResourceDiagnostic[];
+}>;
+
+export type LoadedResourcesSnapshot = Readonly<{
+	contextFiles: readonly LoadedContextFileResource[];
+	skills: readonly LoadedSkillResource[];
+	prompts: readonly LoadedPromptResource[];
+	extensions: readonly LoadedExtensionResource[];
+	themes: readonly LoadedThemeResource[];
+	diagnostics: LoadedResourceDiagnostics;
+}>;
+
 /**
  * Context passed to extension event handlers.
  */
@@ -324,6 +378,8 @@ export interface ExtensionContext {
 	compact(options?: CompactOptions): void;
 	/** Get the current effective system prompt. */
 	getSystemPrompt(): string;
+	/** Get a read-only snapshot of loaded resources. */
+	getResources(): LoadedResourcesSnapshot;
 }
 
 /**
@@ -1220,6 +1276,9 @@ export interface ExtensionAPI {
 	/** Get available slash commands in the current session. */
 	getCommands(): SlashCommandInfo[];
 
+	/** Get a read-only snapshot of loaded resources in the current session. */
+	getResources(): LoadedResourcesSnapshot;
+
 	// =========================================================================
 	// Model and Thinking Level
 	// =========================================================================
@@ -1431,6 +1490,8 @@ export type GetAllToolsHandler = () => ToolInfo[];
 
 export type GetCommandsHandler = () => SlashCommandInfo[];
 
+export type GetResourcesHandler = () => LoadedResourcesSnapshot;
+
 export type SetActiveToolsHandler = (toolNames: string[]) => void;
 
 export type RefreshToolsHandler = () => void;
@@ -1481,6 +1542,7 @@ export interface ExtensionActions {
 	setActiveTools: SetActiveToolsHandler;
 	refreshTools: RefreshToolsHandler;
 	getCommands: GetCommandsHandler;
+	getResources: GetResourcesHandler;
 	setModel: SetModelHandler;
 	getThinkingLevel: GetThinkingLevelHandler;
 	setThinkingLevel: SetThinkingLevelHandler;
@@ -1500,6 +1562,7 @@ export interface ExtensionContextActions {
 	getContextUsage: () => ContextUsage | undefined;
 	compact: (options?: CompactOptions) => void;
 	getSystemPrompt: () => string;
+	getResources: () => LoadedResourcesSnapshot;
 }
 
 /**

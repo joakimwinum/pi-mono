@@ -55,6 +55,7 @@ export {
 	type ExtensionShortcut,
 	type ExtensionUIContext,
 	type LoadExtensionsResult,
+	type LoadedResourcesSnapshot,
 	type MessageRenderer,
 	type RegisteredCommand,
 	type SessionBeforeCompactEvent,

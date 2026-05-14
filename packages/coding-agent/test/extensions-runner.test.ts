@@ -63,6 +63,14 @@ describe("ExtensionRunner", () => {
 		setActiveTools: () => {},
 		refreshTools: () => {},
 		getCommands: () => [],
+		getResources: () => ({
+			contextFiles: [],
+			skills: [],
+			prompts: [],
+			extensions: [],
+			themes: [],
+			diagnostics: { skills: [], prompts: [], extensions: [], themes: [] },
+		}),
 		setModel: async () => false,
 		getThinkingLevel: () => "off",
 		setThinkingLevel: () => {},
@@ -78,6 +86,14 @@ describe("ExtensionRunner", () => {
 		getContextUsage: () => undefined,
 		compact: () => {},
 		getSystemPrompt: () => "",
+		getResources: () => ({
+			contextFiles: [],
+			skills: [],
+			prompts: [],
+			extensions: [],
+			themes: [],
+			diagnostics: { skills: [], prompts: [], extensions: [], themes: [] },
+		}),
 	};
 
 	describe("shortcut conflicts", () => {

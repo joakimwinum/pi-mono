@@ -971,6 +971,21 @@ pi.on("before_agent_start", (event, ctx) => {
 });
 ```
 
+### ctx.getResources()
+
+Returns a read-only snapshot of resources loaded in the current session. The snapshot reflects startup and `/reload` resource discovery and includes context files, skills, prompt templates, extensions, themes, and diagnostics.
+
+```typescript
+pi.on("before_agent_start", (_event, ctx) => {
+  const resources = ctx.getResources();
+  console.log(resources.contextFiles.map((file) => file.path));
+  console.log(resources.skills.map((skill) => skill.name));
+  console.log(resources.diagnostics.prompts);
+});
+```
+
+Use this when customizing headers, auditing loaded resources, or building resource/settings UIs. The returned object is a snapshot; call `ctx.getResources()` again after changes such as `/reload`.
+
 ## ExtensionCommandContext
 
 Command handlers receive `ExtensionCommandContext`, which extends `ExtensionContext` with session control methods. These are only available in commands because they can deadlock if called from event handlers.
@@ -1436,6 +1451,39 @@ Use `sourceInfo` as the canonical provenance field. Do not infer ownership from 
 
 Built-in interactive commands (like `/model` and `/settings`) are not included here. They are handled only in interactive
 mode and would not execute if sent via `prompt`.
+
+### pi.getResources()
+
+Get the same read-only loaded-resource snapshot as `ctx.getResources()` from the extension API object.
+
+```typescript
+pi.registerCommand("resources", {
+  description: "Log loaded resources",
+  handler: async () => {
+    const resources = pi.getResources();
+    const extensionPaths = resources.extensions.map((extension) => extension.path);
+    console.log(extensionPaths);
+  },
+});
+```
+
+The snapshot shape is:
+
+```typescript
+{
+  contextFiles: Array<{ path: string; content: string }>;
+  skills: Array<{ name: string; description: string; filePath: string; baseDir: string; disableModelInvocation: boolean; sourceInfo: SourceInfo }>;
+  prompts: Array<{ name: string; description: string; argumentHint?: string; filePath: string; sourceInfo: SourceInfo }>;
+  extensions: Array<{ path: string; resolvedPath: string; sourceInfo: SourceInfo }>;
+  themes: Array<{ name?: string; path?: string; sourceInfo?: SourceInfo }>;
+  diagnostics: {
+    skills: ResourceDiagnostic[];
+    prompts: ResourceDiagnostic[];
+    extensions: ResourceDiagnostic[];
+    themes: ResourceDiagnostic[];
+  };
+}
+```
 
 ### pi.registerMessageRenderer(customType, renderer)
 

@@ -48,6 +48,7 @@ import {
 	shouldCompact,
 } from "./compaction/index.js";
 import { DEFAULT_THINKING_LEVEL } from "./defaults.js";
+import type { ResourceCollision, ResourceDiagnostic } from "./diagnostics.js";
 import { exportSessionToHtml, type ToolHtmlRenderer } from "./export-html/index.js";
 import { createToolHtmlRenderer } from "./export-html/tool-renderer.js";
 import {
@@ -57,6 +58,7 @@ import {
 	ExtensionRunner,
 	type ExtensionUIContext,
 	type InputSource,
+	type LoadedResourcesSnapshot,
 	type MessageEndEvent,
 	type MessageStartEvent,
 	type MessageUpdateEvent,
@@ -808,6 +810,84 @@ export class AgentSession {
 			parameters: definition.parameters,
 			sourceInfo,
 		}));
+	}
+
+	getResources(): LoadedResourcesSnapshot {
+		const extensionsResult = this._resourceLoader.getExtensions();
+		const skillsResult = this._resourceLoader.getSkills();
+		const promptsResult = this._resourceLoader.getPrompts();
+		const themesResult = this._resourceLoader.getThemes();
+		const contextFiles = this._resourceLoader.getAgentsFiles().agentsFiles;
+
+		return Object.freeze({
+			contextFiles: this._freezeResources(
+				contextFiles.map((contextFile) => ({ path: contextFile.path, content: contextFile.content })),
+			),
+			skills: this._freezeResources(
+				skillsResult.skills.map((skill) => ({
+					name: skill.name,
+					description: skill.description,
+					filePath: skill.filePath,
+					baseDir: skill.baseDir,
+					disableModelInvocation: skill.disableModelInvocation,
+					sourceInfo: this._cloneSourceInfo(skill.sourceInfo),
+				})),
+			),
+			prompts: this._freezeResources(
+				promptsResult.prompts.map((prompt) => ({
+					name: prompt.name,
+					description: prompt.description,
+					...(prompt.argumentHint !== undefined ? { argumentHint: prompt.argumentHint } : {}),
+					filePath: prompt.filePath,
+					sourceInfo: this._cloneSourceInfo(prompt.sourceInfo),
+				})),
+			),
+			extensions: this._freezeResources(
+				extensionsResult.extensions.map((extension) => ({
+					path: extension.path,
+					resolvedPath: extension.resolvedPath,
+					sourceInfo: this._cloneSourceInfo(extension.sourceInfo),
+				})),
+			),
+			themes: this._freezeResources(
+				themesResult.themes.map((loadedTheme) => ({
+					...(loadedTheme.name !== undefined ? { name: loadedTheme.name } : {}),
+					...(loadedTheme.sourcePath !== undefined ? { path: loadedTheme.sourcePath } : {}),
+					...(loadedTheme.sourceInfo !== undefined
+						? { sourceInfo: this._cloneSourceInfo(loadedTheme.sourceInfo) }
+						: {}),
+				})),
+			),
+			diagnostics: Object.freeze({
+				skills: this._cloneDiagnostics(skillsResult.diagnostics),
+				prompts: this._cloneDiagnostics(promptsResult.diagnostics),
+				extensions: this._cloneDiagnostics(
+					extensionsResult.errors.map((error) => ({ type: "error", message: error.error, path: error.path })),
+				),
+				themes: this._cloneDiagnostics(themesResult.diagnostics),
+			}),
+		});
+	}
+
+	private _cloneSourceInfo(sourceInfo: SourceInfo): Readonly<SourceInfo> {
+		return Object.freeze({ ...sourceInfo });
+	}
+
+	private _cloneCollision(collision: ResourceCollision): Readonly<ResourceCollision> {
+		return Object.freeze({ ...collision });
+	}
+
+	private _cloneDiagnostics(diagnostics: readonly ResourceDiagnostic[]) {
+		return this._freezeResources(
+			diagnostics.map((diagnostic) => ({
+				...diagnostic,
+				...(diagnostic.collision ? { collision: this._cloneCollision(diagnostic.collision) } : {}),
+			})),
+		);
+	}
+
+	private _freezeResources<T extends object>(resources: T[]): ReadonlyArray<Readonly<T>> {
+		return Object.freeze(resources.map((resource) => Object.freeze(resource)));
 	}
 
 	getToolDefinition(name: string): ToolDefinition | undefined {
@@ -2191,6 +2271,7 @@ export class AgentSession {
 				setActiveTools: (toolNames) => this.setActiveToolsByName(toolNames),
 				refreshTools: () => this._refreshToolRegistry(),
 				getCommands,
+				getResources: () => this.getResources(),
 				setModel: async (model) => {
 					if (!this.modelRegistry.hasConfiguredAuth(model)) return false;
 					await this.setModel(model);
@@ -2221,6 +2302,7 @@ export class AgentSession {
 					})();
 				},
 				getSystemPrompt: () => this.systemPrompt,
+				getResources: () => this.getResources(),
 			},
 			{
 				registerProvider: (name, config) => {
